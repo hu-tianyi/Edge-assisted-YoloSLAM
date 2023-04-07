@@ -29,13 +29,26 @@ set(SRCS_DUTILS
   DUtils/Timestamp.cpp)
 
 
+# find_package(OpenCV 4 QUIET)
+# if(NOT OpenCV_FOUND)
+#    find_package(OpenCV 3.0 QUIET)
+#    if(NOT OpenCV_FOUND)
+#       message(FATAL_ERROR "OpenCV > 3.0 not found.")
+#    endif()
+# endif()
+
+# CUDA
+set(CUDA_TOOLKIT_ROOT_DIR "/usr/local/cuda")
+find_package(CUDA 11 REQUIRED)
+
+set(CMAKE_CUDA_STANDARD 11)
+set(CMAKE_CUDA_STANDARD_REQUIRED ON)
+
 find_package(OpenCV 4 QUIET)
-if(NOT OpenCV_FOUND)
-   find_package(OpenCV 3.0 QUIET)
    if(NOT OpenCV_FOUND)
-      message(FATAL_ERROR "OpenCV > 3.0 not found.")
+      message(FATAL_ERROR "OpenCV > 4.4.0 not found.")
    endif()
-endif()
+
 
 set(LIBRARY_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/lib)
 
