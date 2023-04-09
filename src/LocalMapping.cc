@@ -377,12 +377,16 @@ void LocalMapping::Run()
                 std::ostringstream os;
                 boost::archive::text_oarchive oa(os);
                 oa << mpCurrentKeyFrame;
+
+                // YoloSLAM: Release mImg space
+                mpCurrentKeyFrame->mImg.release();
+
                 std::string msg;
                 msg = os.str();
                 client_uplink_queue.enqueue(msg);
                 //PostLoadKFandMP(mpCurrentKeyFrame);
             }
-            
+
 
             mpLoopCloser->InsertKeyFrame(mpCurrentKeyFrame);
 
@@ -467,6 +471,11 @@ void LocalMapping::ProcessNewKeyFrame()
         */
         /////////////////////////////CommSLAM////////////////////////////////
         PostLoadKFandMP(mpCurrentKeyFrame);
+
+        // YoloSLAM
+        // Double check the space is released
+        // Another implementation is in KeyFrame.cc --> PostLoad()
+        mpCurrentKeyFrame->mImg.release();
             
     }
     // Compute Bags of Words structures
