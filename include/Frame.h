@@ -67,6 +67,9 @@ public:
     // Constructor for Monocular cameras.
     Frame(const cv::Mat &imGray, const double &timeStamp, ORBextractor* extractor,ORBVocabulary* voc, GeometricCamera* pCamera, cv::Mat &distCoef, const float &bf, const float &thDepth, Frame* pPrevF = static_cast<Frame*>(NULL), const IMU::Calib &ImuCalib = IMU::Calib());
 
+    // YoloSLAM
+    //Frame(const cv::Mat &imGray, const cv::Mat &im, const double &timeStamp, ORBextractor* extractor,ORBVocabulary* voc, GeometricCamera* pCamera, cv::Mat &distCoef, const float &bf, const float &thDepth, Frame* pPrevF = static_cast<Frame*>(NULL), const IMU::Calib &ImuCalib = IMU::Calib());
+
     // Destructor
     // ~Frame();
 
@@ -191,6 +194,11 @@ public:
     
     ///////////////////////////////CommSLAM/////////////////////////////////
     cv::Mat imGray;
+    // YoloSLAM
+    // cv::Mat im;
+    
+    
+    
     // Vocabulary used for relocalization.
     ORBVocabulary* mpORBvocabulary;
 
