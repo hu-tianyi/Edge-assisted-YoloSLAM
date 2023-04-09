@@ -205,13 +205,20 @@ protected:
     // Main tracking function. It is independent of the input sensor.
     void Track();
 
+    //YoloSLAM
+    void Track(cv::Mat im);
+
     // Map initialization for stereo and RGB-D
     void StereoInitialization();
 
     // Map initialization for monocular
     void MonocularInitialization();
+    // YoloSLAM
+    void MonocularInitialization(cv::Mat im);
     //void CreateNewMapPoints();
     void CreateInitialMapMonocular();
+    // YoloSLAM
+    void CreateInitialMapMonocular(cv::Mat im);
 
     void CheckReplacedInLastFrame();
     bool TrackReferenceKeyFrame();
@@ -230,6 +237,8 @@ protected:
 
     bool NeedNewKeyFrame();
     void CreateNewKeyFrame();
+    // YoloSLAM
+    void CreateNewKeyFrame(cv::Mat im);
 
     // Perform preintegration from last frame
     void PreintegrateIMU();
