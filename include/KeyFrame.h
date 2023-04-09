@@ -261,15 +261,29 @@ class KeyFrame
         ar & const_cast<int&>(NRight);
         serializeVectorKeyPoints<Archive>(ar, mvKeysRight, version);
         
-
         ar & mGridRight;
-        
+
+        // Pixel values
+        // size_t elem_size = mImg.elemSize();
+        // size_t elem_type = mImg.type();
+    
+        // ar & mImg.cols;
+        // ar & mImg.rows;
+        // ar & elem_size;
+        // ar & elem_type;
+
+        // const size_t data_size = mImg.cols * mImg.rows * elem_size;
+        // ar & boost::serialization::make_array(mImg.ptr(), data_size);
+        serializeMatrix<Archive>(ar,mImg,version);
     }
 
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
     KeyFrame();
     KeyFrame(Frame &F, Map* pMap, KeyFrameDatabase* pKFDB);
+
+    KeyFrame(Frame &F, cv::Mat im, Map* pMap, KeyFrameDatabase* pKFDB);
+
 
     // Pose functions
     void SetPose(const Sophus::SE3f &Tcw);
@@ -509,6 +523,9 @@ public:
     bool mbInsertLoop;
     //bool mbHasHessian;
     //cv::Mat mHessianPose;
+
+    //Yolo SLAM
+    cv::Mat mImg;
 
     // The following variables need to be accessed trough a mutex to be thread safe.
 protected:

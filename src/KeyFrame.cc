@@ -55,8 +55,86 @@ KeyFrame::KeyFrame():
         mVw = Eigen::Vector3f ();
         mOwb = Eigen::Vector3f ();
         
-        
 }
+
+// YoloSLAM
+KeyFrame::KeyFrame(Frame &F, cv::Mat im, Map *pMap, KeyFrameDatabase *pKFDB):
+    mImg(im), bImu(pMap->isImuInitialized()), mnFrameId(F.mnId),  mTimeStamp(F.mTimeStamp), mnGridCols(FRAME_GRID_COLS), mnGridRows(FRAME_GRID_ROWS),
+    mfGridElementWidthInv(F.mfGridElementWidthInv), mfGridElementHeightInv(F.mfGridElementHeightInv),
+    mnTrackReferenceForFrame(0), mnFuseTargetForKF(0), mnBALocalForKF(0), mnBAFixedForKF(0), mnBALocalForMerge(0),
+    mnLoopQuery(0), mnLoopWords(0), mnRelocQuery(0), mnRelocWords(0), mnMergeQuery(0), mnMergeWords(0),mnBAGlobalForKF(0), mnPlaceRecognitionQuery(0), mnPlaceRecognitionWords(0), mPlaceRecognitionScore(0),
+    fx(F.fx), fy(F.fy), cx(F.cx), cy(F.cy), invfx(F.invfx), invfy(F.invfy),
+    mbf(F.mbf), mb(F.mb), mThDepth(F.mThDepth), N(F.N), mvKeys(F.mvKeys), mvKeysUn(F.mvKeysUn),
+    mvuRight(F.mvuRight), mvDepth(F.mvDepth), mDescriptors(F.mDescriptors.clone()),
+    mBowVec(F.mBowVec), mFeatVec(F.mFeatVec), mnScaleLevels(F.mnScaleLevels), mfScaleFactor(F.mfScaleFactor),
+    mfLogScaleFactor(F.mfLogScaleFactor), mvScaleFactors(F.mvScaleFactors), mvLevelSigma2(F.mvLevelSigma2),
+    mvInvLevelSigma2(F.mvInvLevelSigma2), mnMinX(F.mnMinX), mnMinY(F.mnMinY), mnMaxX(F.mnMaxX),
+    mnMaxY(F.mnMaxY), mK_(F.mK_), mPrevKF(NULL), mNextKF(NULL), mpImuPreintegrated(F.mpImuPreintegrated),
+    mImuCalib(F.mImuCalib), mvpMapPoints(F.mvpMapPoints), mpKeyFrameDB(pKFDB),
+    mpORBvocabulary(F.mpORBvocabulary), mbFirstConnection(true), mpParent(NULL), mDistCoef(F.mDistCoef), mbNotErase(false), mnDataset(F.mnDataset),
+    mbToBeErased(false), mbBad(false), mHalfBaseline(F.mb/2), mpMap(pMap), mbCurrentPlaceRecognition(false), mNameFile(F.mNameFile), mnMergeCorrectedForKF(0),
+    mpCamera(F.mpCamera), mpCamera2(F.mpCamera2),
+    mvLeftToRightMatch(F.mvLeftToRightMatch),mvRightToLeftMatch(F.mvRightToLeftMatch), mTlr(F.GetRelativePoseTlr()),
+    mvKeysRight(F.mvKeysRight), NLeft(F.Nleft), NRight(F.Nright), mTrl(F.GetRelativePoseTrl()), mnNumberOfOpt(0), mbHasVelocity(false)
+{
+    ////////////////////////////CommSLAM///////////////
+    mBackupPrevKFId = -1;
+    mBackupNextKFId = -1;
+    mBackupConnectedKeyFrameIdWeights=map<long unsigned int, int> ();
+    mBackupParentId = -1;        
+    mvBackupChildrensId=static_cast<vector<long unsigned int> >(NULL);
+    mvBackupLoopEdgesId=static_cast<vector<long unsigned int> >(NULL);
+    mvBackupMergeEdgesId=static_cast<vector<long unsigned int> >(NULL);
+    mnBackupIdCamera = -1;
+    mnBackupIdCamera2 = -1;
+    mvBackupMapPointsId=static_cast<vector<long long int> >(NULL);
+    mfScale=0;
+    isStartMap=0;
+    mTcw=Sophus::SE3<float>();
+    mTcwGBA=Sophus::SE3<float>();  
+    mTcwBefGBA=Sophus::SE3<float>();  
+    
+    mTcp=Sophus::SE3<float>();
+    mVwbGBA=Eigen::Vector3f ();
+    mVwbBefGBA = Eigen::Vector3f ();
+    mImuBias = IMU::Bias();
+    mVw = Eigen::Vector3f ();
+    mOwb = Eigen::Vector3f ();
+    mbInsertLoop = true;
+    mnId=nNextId++;
+    
+    mGrid.resize(mnGridCols);
+    if(F.Nleft != -1)  mGridRight.resize(mnGridCols);
+    for(int i=0; i<mnGridCols;i++)
+    {
+        mGrid[i].resize(mnGridRows);
+        if(F.Nleft != -1) mGridRight[i].resize(mnGridRows);
+        for(int j=0; j<mnGridRows; j++){
+            mGrid[i][j] = F.mGrid[i][j];
+            if(F.Nleft != -1){
+                mGridRight[i][j] = F.mGridRight[i][j];
+            }
+        }
+    }
+
+
+
+    if(!F.HasVelocity()) {
+        mVw.setZero();
+        mbHasVelocity = false;
+    }
+    else
+    {
+        mVw = F.GetVelocity();
+        mbHasVelocity = true;
+    }
+
+    mImuBias = F.mImuBias;
+    SetPose(F.GetPose());
+
+    mnOriginMapId = pMap->GetId();
+}
+
 
 //////////CommSLAM////////
 KeyFrame::KeyFrame(Frame &F, Map *pMap, KeyFrameDatabase *pKFDB):
@@ -986,7 +1064,11 @@ void KeyFrame::PostLoad(map<long unsigned int, KeyFrame*>& mpKFid, map<long unsi
     
     mTrl = mTlr.inverse();
     
-
+    // YoloSLAM
+    cout << "Received Image Size: " << mImg.cols << "x" << mImg.rows << endl;
+    
+    // Release the space of mImg
+    mImg.release();
     
     
     // Reference reconstruction
