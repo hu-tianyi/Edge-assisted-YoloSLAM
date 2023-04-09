@@ -274,6 +274,7 @@ int TcpSocket::sendMessage(std::string& message)
     // Send message
     int offset = 0;
     unsigned int payloadSize = 1024;
+    //unsigned int payloadSize = 4096;
     while(messageLen > payloadSize)
     {
         if(!(send(this->socketHandle, (&message[0]) + offset, payloadSize, MSG_NOSIGNAL) == payloadSize))
