@@ -42,7 +42,7 @@ find_package(CUDA 11 REQUIRED)
 set(CMAKE_CUDA_STANDARD 11)
 set(CMAKE_CUDA_STANDARD_REQUIRED ON)
 
-find_package(OpenCV 4 QUIET)
+find_package(OpenCV 4.7 QUIET)
    if(NOT OpenCV_FOUND)
       message(FATAL_ERROR "OpenCV > 4.4.0 not found.")
    endif()
