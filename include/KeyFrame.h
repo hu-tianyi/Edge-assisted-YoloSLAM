@@ -263,6 +263,7 @@ class KeyFrame
         
         ar & mGridRight;
 
+        // YoloSLAM: Method 1
         // Pixel values
         // size_t elem_size = mImg.elemSize();
         // size_t elem_type = mImg.type();

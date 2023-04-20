@@ -39,6 +39,8 @@
 /////////////////CommSLAM//////////////
 #include "Uncertainty.h"
 
+// YoloSLAM
+#include <opencv2/imgcodecs.hpp>
 
 
 #include "GeometricCamera.h"

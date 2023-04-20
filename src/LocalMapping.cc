@@ -372,6 +372,7 @@ void LocalMapping::Run()
             
             if (mRunType=="client")
             {
+                // Release space for the pixel value
                 cerr<<"send mpCurrentKeyFrame"<<mpCurrentKeyFrame->mnId<<endl;
                 PreSaveKFandMP(mpCurrentKeyFrame);
                 std::ostringstream os;

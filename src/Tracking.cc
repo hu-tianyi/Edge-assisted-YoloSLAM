@@ -1621,6 +1621,7 @@ Sophus::SE3f Tracking::GrabImageMonocular(const cv::Mat &im, const double &times
     else
     {
         cout << "YoloSLAM: Add img into tracking" << endl;
+        cout << "Image Size: (" << im.size[0] << "," << im.size[1] << "," << im.channels() << ")"  << endl;
         Track(im);  // Send RGB Image
         //Track(mImGray);  // Send Gray-scale Image
     }
@@ -3649,10 +3650,15 @@ void Tracking::MonocularInitialization()
 void Tracking::CreateInitialMapMonocular(cv::Mat im)
 {
     // Create KeyFrames
-    KeyFrame* pKFini = new KeyFrame(mInitialFrame, im, mpAtlas->GetCurrentMap(),mpKeyFrameDB);
+    // YoloSLAM: Method 2
+    // Encode raw image as .jpg
+    std::vector<unsigned char> encoded_img;
+    cv::imencode(".jpg", im, encoded_img, {cv::IMWRITE_JPEG_QUALITY, 95});
 
-    KeyFrame* pKFcur = new KeyFrame(mCurrentFrame, im, mpAtlas->GetCurrentMap(),mpKeyFrameDB);
-
+    //KeyFrame* pKFini = new KeyFrame(mInitialFrame, im, mpAtlas->GetCurrentMap(),mpKeyFrameDB);
+    KeyFrame* pKFini = new KeyFrame(mInitialFrame, encoded_img, mpAtlas->GetCurrentMap(),mpKeyFrameDB);
+    //KeyFrame* pKFcur = new KeyFrame(mCurrentFrame, im, mpAtlas->GetCurrentMap(),mpKeyFrameDB);
+    KeyFrame* pKFcur = new KeyFrame(mCurrentFrame, encoded_img, mpAtlas->GetCurrentMap(),mpKeyFrameDB);
     
     if(mSensor == System::IMU_MONOCULAR)
         pKFini->mpImuPreintegrated = (IMU::Preintegrated*)(NULL);
@@ -4505,9 +4511,13 @@ void Tracking::CreateNewKeyFrame(cv::Mat im)
         return;
     
     ///////////////////////CommSLAM///////////////////
-    KeyFrame* pKF=new KeyFrame(mCurrentFrame, im, mpAtlas->GetCurrentMap(),mpKeyFrameDB);
-
-
+    // YoloSLAM: Method 1
+    //KeyFrame* pKF=new KeyFrame(mCurrentFrame, im, mpAtlas->GetCurrentMap(),mpKeyFrameDB);
+    // YoloSLAM: Method 2
+    // Encode raw image as .jpg
+    std::vector<unsigned char> encoded_img;
+    cv::imencode(".jpg", im, encoded_img, {cv::IMWRITE_JPEG_QUALITY, 95});
+    KeyFrame* pKF=new KeyFrame(mCurrentFrame, encoded_img, mpAtlas->GetCurrentMap(),mpKeyFrameDB);
 
     if(mpAtlas->isImuInitialized()) //  || mpLocalMapper->IsInitializing())
         pKF->bImu = true;
