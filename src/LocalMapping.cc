@@ -131,6 +131,99 @@ void LocalMapping::Run()
 {
     mbFinished = false;
 
+    Inference *mpYolov8;
+    // YoloSLAM
+    if(mRunType=="server"){
+        std::string projectBasePath = "/home/tianyi/Projects/AdaptSLAM-master/Edge-assisted AdaptSLAM/src/YoloV8";
+        bool runOnGPU = true;
+        clock_t start,end;//数据类型是clock_t，需要头文件#include<time.h>
+        start=clock();
+        // Inference yolov8(projectBasePath + "/models/yolov8s.onnx", cv::Size(640, 480),
+        //             projectBasePath + "/classes/classes.txt", runOnGPU);
+        mpYolov8 = new Inference(projectBasePath + "/models/yolov8s.onnx", cv::Size(640, 480),
+                    projectBasePath + "/classes/classes.txt", runOnGPU);
+        end=clock();
+        std::cout<<"Loading Model Takes: "<<(double)(end-start)/CLOCKS_PER_SEC<<endl;
+        // Load YoloV8 Model
+        std::vector<std::string> imageNames;
+        // The first image would take 1.2 second for inference
+        // I guess it includes the time for initialization
+        // Following images only take 0.02 second for inference
+        // In final implementation, we need to initialize the model in advance, 
+        // say running on an empty image first before start the whole pipeline 
+        //imageNames.push_back(projectBasePath + "/data/bus.jpg");
+        //imageNames.push_back(projectBasePath + "/data/classroom.jpg");
+        imageNames.push_back(projectBasePath + "/data/elephants.jpg");
+        //imageNames.push_back(projectBasePath + "/data/kitti.jpg");
+        //imageNames.push_back(projectBasePath + "/data/street.jpg");
+        //imageNames.push_back(projectBasePath + "/data/zidane.jpg");
+
+        for (int i = 0; i < imageNames.size(); ++i)
+        {
+            start=clock();
+            cv::Mat frame = cv::imread(imageNames[i]);
+
+            // Inference starts here...
+            std::vector<Detection> output = (*mpYolov8).runInference(frame);
+
+            int detections = output.size();
+            std::cout << "Number of detections:" << detections << std::endl;
+            
+            end=clock();
+            std::cout<<"Inference Single Image Takes: "<<(double)(end-start)/CLOCKS_PER_SEC<<endl;
+
+            start=clock();
+
+            bool hasDynamic = false;
+            //cv::Mat mask = cv::Mat::ones(frame.size(), CV_8UC1);
+            cv::Mat mask(frame.size(), CV_8UC1, cv::Scalar(255));
+            
+            for (int i = 0; i < detections; ++i)
+            {
+                Detection detection = output[i];
+
+                cv::Rect box = detection.box;
+                cv::Scalar color = detection.color;
+
+                // Create binary mask with same size as image
+                std::string c = detection.className;
+                if (c == "person" || c == "bicycle" || c == "bus"){
+                    // Detection box
+                    cv::rectangle(mask, box, cv::Scalar(0), cv::FILLED);
+                    hasDynamic = true;
+                }
+                else
+                {
+                    // Detection box
+                    cv::rectangle(frame, box, color, 2);
+                    // Detection box text
+                    std::string classString = detection.className + ' ' + std::to_string(detection.confidence).substr(0, 4);
+                    cv::Size textSize = cv::getTextSize(classString, cv::FONT_HERSHEY_DUPLEX, 1, 2, 0);
+                    cv::Rect textBox(box.x, box.y - 40, textSize.width + 10, textSize.height + 20);
+
+                    cv::rectangle(frame, textBox, color, cv::FILLED);
+                    cv::putText(frame, classString, cv::Point(box.x + 5, box.y - 10), cv::FONT_HERSHEY_DUPLEX, 1, cv::Scalar(0, 0, 0), 2, 0);
+                }
+
+            }
+            // Inference ends here...
+            end=clock();
+            cout<<"Plot Bounding Boxs Takes: "<<(double)(end-start)/CLOCKS_PER_SEC<<endl;
+
+            // // This is only for preview purposes
+            // if (hasDynamic){
+            //     cv::imshow("Binary Mask", mask);
+            // } else {
+            //     float scale = 0.8;
+            //     cv::resize(frame, frame, cv::Size(frame.cols*scale, frame.rows*scale));
+            //     cv::imshow("Inference", frame);
+            // }
+            // cv::waitKey(-1);
+        }
+
+    }
+
+
     while(1)
     {
         
@@ -150,13 +243,20 @@ void LocalMapping::Run()
 #ifdef REGISTER_TIMES
             double timeLBA_ms = 0;
             double timeKFCulling_ms = 0;
-
+ 
             std::chrono::steady_clock::time_point time_StartProcessKF = std::chrono::steady_clock::now();
 #endif
             // BoW conversion and insertion in Map
 
-            ProcessNewKeyFrame();
-         
+
+            // YoloSLAM
+            //ProcessNewKeyFrame();
+            if (mRunType=="server"){
+                ProcessNewKeyFrame((*mpYolov8));
+            }
+            else if (mRunType=="client"){
+                ProcessNewKeyFrame();
+            }
 #ifdef REGISTER_TIMES
             std::chrono::steady_clock::time_point time_EndProcessKF = std::chrono::steady_clock::now();
 
@@ -373,21 +473,23 @@ void LocalMapping::Run()
             if (mRunType=="client")
             {
                 // Release space for the pixel value
+                mpCurrentKeyFrame->encoded_img_data.clear();
+                mpCurrentKeyFrame->encoded_img_data.shrink_to_fit();
                 cerr<<"send mpCurrentKeyFrame"<<mpCurrentKeyFrame->mnId<<endl;
                 PreSaveKFandMP(mpCurrentKeyFrame);
                 std::ostringstream os;
                 boost::archive::text_oarchive oa(os);
                 oa << mpCurrentKeyFrame;
-
-                // YoloSLAM: Release mImg space
-                mpCurrentKeyFrame->mImg.release();
-
                 std::string msg;
                 msg = os.str();
                 client_uplink_queue.enqueue(msg);
                 //PostLoadKFandMP(mpCurrentKeyFrame);
+                // YoloSLAM
+                // Release space for the pixel value
+                mpCurrentKeyFrame->encoded_img_data.clear();
+                mpCurrentKeyFrame->encoded_img_data.shrink_to_fit();
             }
-
+            
 
             mpLoopCloser->InsertKeyFrame(mpCurrentKeyFrame);
 
@@ -450,7 +552,9 @@ bool LocalMapping::CheckNewKeyFrames()
     return(!mlNewKeyFrames.empty());
 }
 
-void LocalMapping::ProcessNewKeyFrame()
+
+// YoloSLAM
+void LocalMapping::ProcessNewKeyFrame(Inference &model)
 {
     {
         unique_lock<mutex> lock(mMutexNewKFs);
@@ -471,12 +575,10 @@ void LocalMapping::ProcessNewKeyFrame()
         }
         */
         /////////////////////////////CommSLAM////////////////////////////////
-        PostLoadKFandMP(mpCurrentKeyFrame);
-
+        
         // YoloSLAM
-        // Double check the space is released
-        // Another implementation is in KeyFrame.cc --> PostLoad()
-        mpCurrentKeyFrame->mImg.release();
+        //PostLoadKFandMP(mpCurrentKeyFrame);
+        PostLoadKFandMP(mpCurrentKeyFrame, model);
             
     }
     // Compute Bags of Words structures
@@ -525,6 +627,265 @@ void LocalMapping::ProcessNewKeyFrame()
     cerr<<"mpAtlas size"<<mpAtlas->KeyFramesInMap()<<endl;
 }
 
+
+
+void LocalMapping::ProcessNewKeyFrame()
+{
+    {
+        unique_lock<mutex> lock(mMutexNewKFs);
+        mpCurrentKeyFrame = mlNewKeyFrames.front();
+        mlNewKeyFrames.pop_front();
+    }
+    if (mRunType=="server")
+    {
+        map<long unsigned int, KeyFrame*>::iterator it;
+        
+        /*
+        for (it = mpKFid.begin(); it != mpKFid.end(); it++)
+        {       
+              cerr << it->first    
+              << ':'
+              << it->second->mnId   
+              << endl;
+        }
+        */
+        /////////////////////////////CommSLAM////////////////////////////////
+        PostLoadKFandMP(mpCurrentKeyFrame);
+            
+    }
+
+    // Compute Bags of Words structures
+    mpCurrentKeyFrame->ComputeBoW();
+
+    // Associate MapPoints to the new keyframe and update normal and descriptor
+ 
+    
+    if (mRunType=="client")
+    {
+    // YoloSLAM: Not the right place to release
+    // Release space for the pixel value
+    //mpCurrentKeyFrame->encoded_img_data.clear();
+    //mpCurrentKeyFrame->encoded_img_data.shrink_to_fit();
+    
+    const vector<MapPoint*> vpMapPointMatches = mpCurrentKeyFrame->GetMapPointMatches();
+    for(size_t i=0; i<vpMapPointMatches.size(); i++)
+    {
+        MapPoint* pMP = vpMapPointMatches[i];
+        if(pMP)
+        {
+         
+            if(!pMP->isBad())
+            {
+                if(!pMP->IsInKeyFrame(mpCurrentKeyFrame))
+                {
+                    pMP->AddObservation(mpCurrentKeyFrame, i);
+                    pMP->UpdateNormalAndDepth();
+                    pMP->ComputeDistinctiveDescriptors();
+                    //////////////////////CommSLAM//////////////////////
+                    mpMPid[pMP->mnId]=pMP;
+                }
+                else // this can only happen for new stereo points inserted by the Tracking
+                {
+                    mlpRecentAddedMapPoints.push_back(pMP);
+                }
+            }
+        }
+    }
+    //////////////////////CommSLAM//////////////////////
+    mpKFid[mpCurrentKeyFrame->mnId]=mpCurrentKeyFrame;
+    // Insert Keyframe in Map
+    mpAtlas->AddKeyFrame(mpCurrentKeyFrame);
+    }
+
+    // Update links in the Covisibility Graph
+    mpCurrentKeyFrame->UpdateConnections();
+    // Insert Keyframe in Map
+    //mpAtlas->AddKeyFrame(mpCurrentKeyFrame);
+    cerr<<"mpCurrentKeyFrame->mnId"<<mpCurrentKeyFrame->mnId<<endl;
+    cerr<<"mpAtlas size"<<mpAtlas->KeyFramesInMap()<<endl;
+}
+
+
+// YoloSLAM
+void LocalMapping::PostLoadKFandMP(KeyFrame *mpCurrentKeyFrame, Inference &model)
+{
+        auto start = std::chrono::system_clock::now();
+        auto end = std::chrono::system_clock::now();
+ 
+        std::chrono::duration<double> elapsed_seconds;
+        std::time_t end_time;
+
+        // YoloSLAM
+        //cv::Mat frame = mpCurrentKeyFrame->mImg.clone();
+
+        // YoloSLAM: Method 2
+        // flag = 1 --> read corlor in BGR color format
+        if(mpCurrentKeyFrame->encoded_img_data.size()>0){
+            cv::Mat frame = cv::imdecode(mpCurrentKeyFrame->encoded_img_data, 1);
+            cout << "Received Image Size: (" << frame.size[0] << "," << frame.size[1] << "," << frame.channels() << ")"  << endl;
+            // Release space
+            mpCurrentKeyFrame->encoded_img_data.clear();
+            mpCurrentKeyFrame->encoded_img_data.shrink_to_fit();
+
+            if (frame.cols > 0){
+                // Inference starts here...
+                std::vector<Detection> output = model.runInference(frame);
+                int detections = output.size();
+                std::cout << "Number of detections:" << detections << std::endl;
+
+                // bool hasDynamic = false;
+                // //cv::Mat mask = cv::Mat::ones(frame.size(), CV_8UC1);
+                // cv::Mat mask(frame.size(), CV_8UC1, cv::Scalar(255));
+                
+                // for (int i = 0; i < detections; ++i)
+                // {
+                //     Detection detection = output[i];
+
+                //     cv::Rect box = detection.box;
+                //     cv::Scalar color = detection.color;
+
+                //     // Create binary mask with same size as image
+                //     // std::string c = detection.className;
+                //     // if (c == "person" || c == "bicycle" || c == "bus"){
+                //     //     // Detection box
+                //     //     cv::rectangle(mask, box, cv::Scalar(0), cv::FILLED);
+                //     //     hasDynamic = true;
+                //     // }
+                //     // else
+                //     // {
+                //         // Detection box
+                //         cv::rectangle(frame, box, color, 2);
+                //         // Detection box text
+                //         std::string classString = detection.className + ' ' + std::to_string(detection.confidence).substr(0, 4);
+                //         cv::Size textSize = cv::getTextSize(classString, cv::FONT_HERSHEY_DUPLEX, 1, 2, 0);
+                //         cv::Rect textBox(box.x, box.y - 40, textSize.width + 10, textSize.height + 20);
+
+                //         cv::rectangle(frame, textBox, color, cv::FILLED);
+                //         cv::putText(frame, classString, cv::Point(box.x + 5, box.y - 10), cv::FONT_HERSHEY_DUPLEX, 1, cv::Scalar(0, 0, 0), 2, 0);
+                //     //}
+                //     // // This is only for preview purposes
+                //     cv::imshow("Inference", frame);
+                //     cv::waitKey(1);
+
+                // }
+            }
+            // Free the memory space of the image
+            //mpCurrentKeyFrame->mImg.release();
+            // Already released
+        }
+        
+
+        
+
+        /////////////////////////////CommSLAM////////////////////////////////
+        //Assign Map
+ 
+        AssignMap(mpCurrentKeyFrame,mpCurrentKeyFrame->mnMapId);
+
+        mpCurrentKeyFrame->SetORBVocabulary(mpORBVocabulary);
+        mpCurrentKeyFrame->SetKeyFrameDatabase(mpKeyFrameDB);
+
+        AddKFSet(mpCurrentKeyFrame); 
+                
+                
+ 
+        if (nflag==0)
+        {
+            vector<MapPoint*> vpMapPointMatches = mpCurrentKeyFrame->GetMapPointMatches();
+            //cerr<<"vpMapPointMatches.size()"<<vpMapPointMatches.size()<<endl;
+            for(size_t i=0; i<vpMapPointMatches.size(); i++)
+            {
+                MapPoint* pMP = vpMapPointMatches[i];
+                if(pMP)
+                {   
+                    pMP->UpdateMap(mpCurrentKeyFrame->GetMap());
+                    AddMPSet(pMP);
+                    pMP->PostLoad(mpKFid, mpMPid,mpCurrentKeyFrame);
+                }
+            }
+            end = std::chrono::system_clock::now();
+ 
+            elapsed_seconds = end-start;
+            end_time = std::chrono::system_clock::to_time_t(end);
+ 
+            std::cout << "elapsed time: " << elapsed_seconds.count() << "s"<< std::endl;
+          
+            mpCurrentKeyFrame->PostLoad(mpKFid,mpMPid, mpCamId);
+         
+            nflag=mpCurrentKeyFrame->isStartMap;
+     
+            if (nflag==0)
+            {
+         
+                mpCurrentKeyFrame->UpdateConnections();
+            
+                mpCurrentKeyFrame->UpdateBestCovisibles();
+            }
+   
+        }
+            else if (nflag==2)
+            {
+          
+                vector<MapPoint*> vpMapPointMatches = mpCurrentKeyFramePre->GetMapPointMatches();
+                    
+                //cerr<<"!!!!!!!!!!!!!!vpMapPointMatches.size()"<<vpMapPointMatches.size()<<endl;
+                for(size_t i=0; i<vpMapPointMatches.size(); i++)
+                {
+                    MapPoint* pMP = vpMapPointMatches[i];
+                    if(pMP)
+                    {   
+                        //pMP->UpdateMap(tKFPre->GetMap());
+                        //mpLocalMapper->AddMPSet(pMP);
+                        pMP->PostLoad(mpKFid, mpMPid,mpCurrentKeyFramePre);
+                    }
+                }
+                mpCurrentKeyFramePre->PostLoad(mpKFid,mpMPid, mpCamId);
+                mpCurrentKeyFrame->UpdateConnections();
+                mpCurrentKeyFramePre->UpdateBestCovisibles();
+
+                
+                vpMapPointMatches = mpCurrentKeyFrame->GetMapPointMatches();
+
+                for(size_t i=0; i<vpMapPointMatches.size(); i++)
+                {
+                    MapPoint* pMP = vpMapPointMatches[i];
+                    if(pMP)
+                    {   
+                        pMP->UpdateMap(mpCurrentKeyFrame->GetMap());
+                        AddMPSet(pMP);
+                        pMP->PostLoad(mpKFid, mpMPid,mpCurrentKeyFrame);
+                    }
+                }
+                mpCurrentKeyFrame->PostLoad(mpKFid,mpMPid, mpCamId);
+                mpCurrentKeyFrame->UpdateConnections();
+                    
+                mpCurrentKeyFrame->UpdateBestCovisibles();
+                
+                nflag=0;
+                    
+            }
+                
+            if (nflag==1)
+            {
+                mpCurrentKeyFramePre=mpCurrentKeyFrame;
+                nflag=2;
+            }
+         
+            
+            end = std::chrono::system_clock::now();
+ 
+            elapsed_seconds = end-start;
+            end_time = std::chrono::system_clock::to_time_t(end);
+ 
+            std::cout << "elapsed time: " << elapsed_seconds.count() << "s"<< std::endl;
+
+    
+
+}
+
+
+
+
 ///////////////////////////CommSLAM/////////////////////////////
 void LocalMapping::PostLoadKFandMP(KeyFrame *mpCurrentKeyFrame)
 {
@@ -534,7 +895,13 @@ void LocalMapping::PostLoadKFandMP(KeyFrame *mpCurrentKeyFrame)
         std::chrono::duration<double> elapsed_seconds;
         std::time_t end_time;
  
-            
+        // YoloSLAM
+        // Just wanna make sure it is all empty
+        if (mpCurrentKeyFrame->encoded_img_data.size()>0)
+        {
+            mpCurrentKeyFrame->encoded_img_data.clear();
+            mpCurrentKeyFrame->encoded_img_data.shrink_to_fit();
+        }    
            /////////////////////////////CommSLAM////////////////////////////////
         //Assign Map
  
@@ -1450,6 +1817,11 @@ void LocalMapping::KeyFrameCulling()
             else
             {
                 pKF->SetBadFlag();
+                // YoloSLAM
+                // Release space for the pixel value
+                mpCurrentKeyFrame->encoded_img_data.clear();
+                mpCurrentKeyFrame->encoded_img_data.shrink_to_fit();
+                
             }
         }
         if((count > 20 && mbAbortBA) || count>100)

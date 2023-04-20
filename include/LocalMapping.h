@@ -37,6 +37,12 @@
 #include <boost/archive/text_iarchive.hpp>
 #include "ORBVocabulary.h"
 
+// YoloSLAM
+// added for the YoloV8 detector
+#include "YoloV8.h"
+#include <opencv2/opencv.hpp>
+#include <opencv2/imgcodecs.hpp>
+
 namespace ORB_SLAM3
 {
 
@@ -97,6 +103,9 @@ public:
     
     ////////////////////////CommSLAM/////////////////////
     void PostLoadKFandMP(KeyFrame* pKF);
+    // YoloSLAM
+    void PostLoadKFandMP(KeyFrame* pKF, Inference &model);
+
     void PreSaveKFandMP(KeyFrame* pKF);
     void PostLoadKFandMPSet(map<long unsigned int, KeyFrame*> StoreKFid);
     map<long unsigned int, MapPoint*> GetmpMPid();
@@ -151,8 +160,7 @@ public:
     Atlas* mpAtlas;
     int nflag;
     KeyFrame *mpCurrentKeyFramePre;
-    
-    
+
     
     TcpSocket* uplink_socket;
     TcpSocket* downlink_socket;
@@ -182,6 +190,10 @@ protected:
 
     bool CheckNewKeyFrames();
     void ProcessNewKeyFrame();
+    // YoloSLAM
+    void ProcessNewKeyFrame(Inference &model);
+    
+
     void CreateNewMapPoints();
 
     void MapPointCulling();
