@@ -57,9 +57,89 @@ KeyFrame::KeyFrame():
         
 }
 
-// YoloSLAM
-KeyFrame::KeyFrame(Frame &F, cv::Mat im, Map *pMap, KeyFrameDatabase *pKFDB):
-    mImg(im), bImu(pMap->isImuInitialized()), mnFrameId(F.mnId),  mTimeStamp(F.mTimeStamp), mnGridCols(FRAME_GRID_COLS), mnGridRows(FRAME_GRID_ROWS),
+// YoloSLAM: Method 1
+// KeyFrame::KeyFrame(Frame &F, cv::Mat im, Map *pMap, KeyFrameDatabase *pKFDB):
+//     mImg(im), bImu(pMap->isImuInitialized()), mnFrameId(F.mnId),  mTimeStamp(F.mTimeStamp), mnGridCols(FRAME_GRID_COLS), mnGridRows(FRAME_GRID_ROWS),
+//     mfGridElementWidthInv(F.mfGridElementWidthInv), mfGridElementHeightInv(F.mfGridElementHeightInv),
+//     mnTrackReferenceForFrame(0), mnFuseTargetForKF(0), mnBALocalForKF(0), mnBAFixedForKF(0), mnBALocalForMerge(0),
+//     mnLoopQuery(0), mnLoopWords(0), mnRelocQuery(0), mnRelocWords(0), mnMergeQuery(0), mnMergeWords(0),mnBAGlobalForKF(0), mnPlaceRecognitionQuery(0), mnPlaceRecognitionWords(0), mPlaceRecognitionScore(0),
+//     fx(F.fx), fy(F.fy), cx(F.cx), cy(F.cy), invfx(F.invfx), invfy(F.invfy),
+//     mbf(F.mbf), mb(F.mb), mThDepth(F.mThDepth), N(F.N), mvKeys(F.mvKeys), mvKeysUn(F.mvKeysUn),
+//     mvuRight(F.mvuRight), mvDepth(F.mvDepth), mDescriptors(F.mDescriptors.clone()),
+//     mBowVec(F.mBowVec), mFeatVec(F.mFeatVec), mnScaleLevels(F.mnScaleLevels), mfScaleFactor(F.mfScaleFactor),
+//     mfLogScaleFactor(F.mfLogScaleFactor), mvScaleFactors(F.mvScaleFactors), mvLevelSigma2(F.mvLevelSigma2),
+//     mvInvLevelSigma2(F.mvInvLevelSigma2), mnMinX(F.mnMinX), mnMinY(F.mnMinY), mnMaxX(F.mnMaxX),
+//     mnMaxY(F.mnMaxY), mK_(F.mK_), mPrevKF(NULL), mNextKF(NULL), mpImuPreintegrated(F.mpImuPreintegrated),
+//     mImuCalib(F.mImuCalib), mvpMapPoints(F.mvpMapPoints), mpKeyFrameDB(pKFDB),
+//     mpORBvocabulary(F.mpORBvocabulary), mbFirstConnection(true), mpParent(NULL), mDistCoef(F.mDistCoef), mbNotErase(false), mnDataset(F.mnDataset),
+//     mbToBeErased(false), mbBad(false), mHalfBaseline(F.mb/2), mpMap(pMap), mbCurrentPlaceRecognition(false), mNameFile(F.mNameFile), mnMergeCorrectedForKF(0),
+//     mpCamera(F.mpCamera), mpCamera2(F.mpCamera2),
+//     mvLeftToRightMatch(F.mvLeftToRightMatch),mvRightToLeftMatch(F.mvRightToLeftMatch), mTlr(F.GetRelativePoseTlr()),
+//     mvKeysRight(F.mvKeysRight), NLeft(F.Nleft), NRight(F.Nright), mTrl(F.GetRelativePoseTrl()), mnNumberOfOpt(0), mbHasVelocity(false)
+// {
+//     ////////////////////////////CommSLAM///////////////
+//     mBackupPrevKFId = -1;
+//     mBackupNextKFId = -1;
+//     mBackupConnectedKeyFrameIdWeights=map<long unsigned int, int> ();
+//     mBackupParentId = -1;        
+//     mvBackupChildrensId=static_cast<vector<long unsigned int> >(NULL);
+//     mvBackupLoopEdgesId=static_cast<vector<long unsigned int> >(NULL);
+//     mvBackupMergeEdgesId=static_cast<vector<long unsigned int> >(NULL);
+//     mnBackupIdCamera = -1;
+//     mnBackupIdCamera2 = -1;
+//     mvBackupMapPointsId=static_cast<vector<long long int> >(NULL);
+//     mfScale=0;
+//     isStartMap=0;
+//     mTcw=Sophus::SE3<float>();
+//     mTcwGBA=Sophus::SE3<float>();  
+//     mTcwBefGBA=Sophus::SE3<float>();  
+    
+//     mTcp=Sophus::SE3<float>();
+//     mVwbGBA=Eigen::Vector3f ();
+//     mVwbBefGBA = Eigen::Vector3f ();
+//     mImuBias = IMU::Bias();
+//     mVw = Eigen::Vector3f ();
+//     mOwb = Eigen::Vector3f ();
+//     mbInsertLoop = true;
+//     mnId=nNextId++;
+    
+//     mGrid.resize(mnGridCols);
+//     if(F.Nleft != -1)  mGridRight.resize(mnGridCols);
+//     for(int i=0; i<mnGridCols;i++)
+//     {
+//         mGrid[i].resize(mnGridRows);
+//         if(F.Nleft != -1) mGridRight[i].resize(mnGridRows);
+//         for(int j=0; j<mnGridRows; j++){
+//             mGrid[i][j] = F.mGrid[i][j];
+//             if(F.Nleft != -1){
+//                 mGridRight[i][j] = F.mGridRight[i][j];
+//             }
+//         }
+//     }
+
+
+
+//     if(!F.HasVelocity()) {
+//         mVw.setZero();
+//         mbHasVelocity = false;
+//     }
+//     else
+//     {
+//         mVw = F.GetVelocity();
+//         mbHasVelocity = true;
+//     }
+
+//     mImuBias = F.mImuBias;
+//     SetPose(F.GetPose());
+
+//     mnOriginMapId = pMap->GetId();
+// }
+
+
+
+// YoloSLAM: Method 2
+KeyFrame::KeyFrame(Frame &F, std::vector<unsigned char> &encoded_img, Map *pMap, KeyFrameDatabase *pKFDB):
+    encoded_img_data(encoded_img), bImu(pMap->isImuInitialized()), mnFrameId(F.mnId),  mTimeStamp(F.mTimeStamp), mnGridCols(FRAME_GRID_COLS), mnGridRows(FRAME_GRID_ROWS),
     mfGridElementWidthInv(F.mfGridElementWidthInv), mfGridElementHeightInv(F.mfGridElementHeightInv),
     mnTrackReferenceForFrame(0), mnFuseTargetForKF(0), mnBALocalForKF(0), mnBAFixedForKF(0), mnBALocalForMerge(0),
     mnLoopQuery(0), mnLoopWords(0), mnRelocQuery(0), mnRelocWords(0), mnMergeQuery(0), mnMergeWords(0),mnBAGlobalForKF(0), mnPlaceRecognitionQuery(0), mnPlaceRecognitionWords(0), mPlaceRecognitionScore(0),
@@ -134,6 +214,7 @@ KeyFrame::KeyFrame(Frame &F, cv::Mat im, Map *pMap, KeyFrameDatabase *pKFDB):
 
     mnOriginMapId = pMap->GetId();
 }
+
 
 
 //////////CommSLAM////////
@@ -1055,6 +1136,152 @@ void KeyFrame::PreSave(set<KeyFrame*>& spKF,set<MapPoint*>& spMP, set<GeometricC
 }
 
 
+// // YoloSLAM
+// void KeyFrame::PostLoad(map<long unsigned int, KeyFrame*>& mpKFid, map<long unsigned int,
+//                         MapPoint*>& mpMPid, map<unsigned int, GeometricCamera*>& mpCamId, Inference &yolov8)
+// {
+//     // Rebuild the empty variables
+
+//     // Pose
+//     SetPose(mTcw);
+    
+//     mTrl = mTlr.inverse();
+    
+//     // YoloSLAM
+//     // cout << "Received Image Size: (" << mImg.size[0] << "," << mImg.size[1] << "," << mImg.channels() << ")"  << endl;
+    
+//     // Let's do the YoloV8 inference here!
+//     // Inference starts here...
+    
+//     cv::Mat temp = mImg.clone();
+//     if (mImg.cols > 0)
+//     {
+//         //cv::resize(mImg, mImg, mImg.size());
+//         //cout << "Perform Object Detection" << endl;
+//         //cv::imshow("Received Images", mImg);
+//         //cv::waitKey(0);
+//         // std::cout << "Pointer Address of yolov8: " << std::endl;
+//         // std::cout << yolov8 << std::endl;
+
+//         std::vector<Detection> objects = yolov8.runInference(temp);
+//         int detections = objects.size();
+//         cout << "Detects " << detections << " Objects" << endl;
+//     }
+    
+    
+//     // Release the space of mImg
+//     mImg.release();
+    
+    
+//     // Reference reconstruction
+//     // Each MapPoint sight from this KeyFrame
+//     //mvpMapPoints.clear();
+//     //mvpMapPoints.resize(N);
+//     //cerr<<"N"<<N<<"mvpMapPoints.size()"<<mvpMapPoints.size()<<endl;
+//     for(int i=0; i<mvpMapPoints.size(); ++i)
+//     {
+//         if(mvBackupMapPointsId[i] != -1)
+//         {
+//             mvpMapPoints[i] = mpMPid[mvBackupMapPointsId[i]];
+//             //cerr<<"mvpMapPoints[i]"<<mvpMapPoints[i]->mnId<<endl;
+//         }
+//         else
+//         {
+//             mvpMapPoints[i] = static_cast<MapPoint*>(NULL);
+            
+//         }
+//     }
+ 
+//     // Conected KeyFrames with him weight
+//     mConnectedKeyFrameWeights.clear();
+//     //cerr<<"mBackupConnectedKeyFrameIdWeights.size"<<mBackupConnectedKeyFrameIdWeights.size()<<endl;
+//     for(map<long unsigned int, int>::const_iterator it = mBackupConnectedKeyFrameIdWeights.begin(), end = mBackupConnectedKeyFrameIdWeights.end();
+//         it != end; ++it)
+//     {
+       
+//         if(mpKFid.find(it->first) != mpKFid.end())
+//         {
+//             KeyFrame* pKFi = mpKFid[it->first];
+//             mConnectedKeyFrameWeights[pKFi] = it->second;
+//         }
+//     }
+    
+ 
+//     // Restore parent KeyFrame
+//     if(mBackupParentId>=0)
+//         if(mpKFid.find(mBackupParentId) != mpKFid.end())
+//             mpParent = mpKFid[mBackupParentId];
+    
+
+//     // KeyFrame childrens
+//     mspChildrens.clear();
+//     for(vector<long unsigned int>::const_iterator it = mvBackupChildrensId.begin(), end = mvBackupChildrensId.end(); it!=end; ++it)
+//     {
+//         if(mpKFid.find(*it) != mpKFid.end())
+//         mspChildrens.insert(mpKFid[*it]);
+//     }
+
+//     // Loop edge KeyFrame
+//     mspLoopEdges.clear();
+//     for(vector<long unsigned int>::const_iterator it = mvBackupLoopEdgesId.begin(), end = mvBackupLoopEdgesId.end(); it != end; ++it)
+//     {
+//         if(mpKFid.find(*it) != mpKFid.end())
+//             mspLoopEdges.insert(mpKFid[*it]);
+//     }
+
+//     // Merge edge KeyFrame
+//     mspMergeEdges.clear();
+//     for(vector<long unsigned int>::const_iterator it = mvBackupMergeEdgesId.begin(), end = mvBackupMergeEdgesId.end(); it != end; ++it)
+//     {
+//            if(mpKFid.find(*it) != mpKFid.end())
+//         mspMergeEdges.insert(mpKFid[*it]);
+//     }
+
+//     //Camera data
+//     if(mnBackupIdCamera >= 0)
+//     {
+//         mpCamera = mpCamId[mnBackupIdCamera];
+//     }
+//     else
+//     {
+//         cout << "ERROR: There is not a main camera in KF " << mnId << endl;
+//     }
+//     if(mnBackupIdCamera2 >= 0)
+//     {
+//         mpCamera2 = mpCamId[mnBackupIdCamera2];
+//     }
+
+//     //Inertial data
+//     if(mBackupPrevKFId != -1)
+//     {
+//         if(mpKFid.find(mBackupPrevKFId) != mpKFid.end())
+//         {
+//             mPrevKF = mpKFid[mBackupPrevKFId];
+//             mPrevKF->mNextKF = this;
+        
+//         }
+//     }
+//     if(mBackupNextKFId != -1)
+//     {
+//         if(mpKFid.find(mBackupNextKFId) != mpKFid.end())
+//         {
+//             mNextKF = mpKFid[mBackupNextKFId];
+       
+//         }
+//     }
+//     mpImuPreintegrated = &mBackupImuPreintegrated;
+
+
+//     // Remove all backup container
+//     //mvBackupMapPointsId.clear();
+//     //mBackupConnectedKeyFrameIdWeights.clear();
+//     //mvBackupChildrensId.clear();
+//     //mvBackupLoopEdgesId.clear();
+//     /////////CommSLAM//////////////
+//     //UpdateBestCovisibles();
+// }
+
+
 
 void KeyFrame::PostLoad(map<long unsigned int, KeyFrame*>& mpKFid, map<long unsigned int, MapPoint*>& mpMPid, map<unsigned int, GeometricCamera*>& mpCamId){
     // Rebuild the empty variables
@@ -1063,13 +1290,6 @@ void KeyFrame::PostLoad(map<long unsigned int, KeyFrame*>& mpKFid, map<long unsi
     SetPose(mTcw);
     
     mTrl = mTlr.inverse();
-    
-    // YoloSLAM
-    cout << "Received Image Size: " << mImg.cols << "x" << mImg.rows << endl;
-    
-    // Release the space of mImg
-    mImg.release();
-    
     
     // Reference reconstruction
     // Each MapPoint sight from this KeyFrame

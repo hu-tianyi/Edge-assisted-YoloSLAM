@@ -45,6 +45,11 @@
 #include <boost/archive/text_iarchive.hpp>
 #include <boost/serialization/set.hpp>
 
+
+// YoloSLAM
+// added for the YoloV8 detector
+#include "YoloV8.h"
+
 namespace ORB_SLAM3
 {
 
@@ -275,7 +280,12 @@ class KeyFrame
 
         // const size_t data_size = mImg.cols * mImg.rows * elem_size;
         // ar & boost::serialization::make_array(mImg.ptr(), data_size);
-        serializeMatrix<Archive>(ar,mImg,version);
+        //serializeMatrix<Archive>(ar,mImg,version);
+
+        // YoloSLAM: Method 2
+        ar & const_cast<vector<unsigned char>& >(encoded_img_data);
+        
+
     }
 
 public:
@@ -283,7 +293,10 @@ public:
     KeyFrame();
     KeyFrame(Frame &F, Map* pMap, KeyFrameDatabase* pKFDB);
 
-    KeyFrame(Frame &F, cv::Mat im, Map* pMap, KeyFrameDatabase* pKFDB);
+    // YoloSLAM: Method 1
+    //KeyFrame(Frame &F, cv::Mat im, Map* pMap, KeyFrameDatabase* pKFDB);
+    // YoloSLAM: Method 2
+    KeyFrame(Frame &F, std::vector<unsigned char> &encoded_img, Map* pMap, KeyFrameDatabase* pKFDB);
 
 
     // Pose functions
@@ -387,6 +400,10 @@ public:
 
     void PreSave(set<KeyFrame*>& spKF,set<MapPoint*>& spMP, set<GeometricCamera*>& spCam);
     void PostLoad(map<long unsigned int, KeyFrame*>& mpKFid, map<long unsigned int, MapPoint*>& mpMPid, map<unsigned int, GeometricCamera*>& mpCamId);
+
+    // YoloSLAM
+    // void PostLoad(map<long unsigned int, KeyFrame*>& mpKFid, map<long unsigned int,
+    //               MapPoint*>& mpMPid, map<unsigned int, GeometricCamera*>& mpCamId, Inference &yolov8);
 
 
     void SetORBVocabulary(ORBVocabulary* pORBVoc);
@@ -525,8 +542,11 @@ public:
     //bool mbHasHessian;
     //cv::Mat mHessianPose;
 
-    //Yolo SLAM
-    cv::Mat mImg;
+    // YoloSLAM: Method 1
+    //cv::Mat mImg;
+
+    // YoloSLAM: Method 2
+    std::vector<unsigned char> encoded_img_data;
 
     // The following variables need to be accessed trough a mutex to be thread safe.
 protected:
