@@ -1614,6 +1614,7 @@ Sophus::SE3f Tracking::GrabImageMonocular(const cv::Mat &im, const double &times
     lastID = mCurrentFrame.mnId;
     
     // YoloSLAM
+    // Method 1: Only send pixels when it is not lost and not initialize
     if(mState==NOT_INITIALIZED || mState==LOST || mState==RECENTLY_LOST)
     {
         Track();
@@ -1622,11 +1623,16 @@ Sophus::SE3f Tracking::GrabImageMonocular(const cv::Mat &im, const double &times
     {
         cout << "YoloSLAM: Add img into tracking" << endl;
         cout << "Image Size: (" << im.size[0] << "," << im.size[1] << "," << im.channels() << ")"  << endl;
+        
+        // Disable YoloSLAM
+        //Track();
+        // Enable YoloSLAM
         Track(im);  // Send RGB Image
         //Track(mImGray);  // Send Gray-scale Image
     }
-    //cout << "YoloSLAM: Add img into tracking" << endl;
-    //Track(im);
+    // Method 2: Send pixels whatever situation
+    // cout << "YoloSLAM: Add img into tracking" << endl;
+    // Track(im);
     
 
     return mCurrentFrame.GetPose();
