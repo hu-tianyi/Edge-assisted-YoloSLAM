@@ -472,9 +472,9 @@ void LocalMapping::Run()
             
             if (mRunType=="client")
             {
-                // Release space for the pixel value
-                mpCurrentKeyFrame->encoded_img_data.clear();
-                mpCurrentKeyFrame->encoded_img_data.shrink_to_fit();
+                // Release space of the pixel value before send
+                //mpCurrentKeyFrame->encoded_img_data.clear();
+                //mpCurrentKeyFrame->encoded_img_data.shrink_to_fit();
                 cerr<<"send mpCurrentKeyFrame"<<mpCurrentKeyFrame->mnId<<endl;
                 PreSaveKFandMP(mpCurrentKeyFrame);
                 std::ostringstream os;
@@ -485,7 +485,7 @@ void LocalMapping::Run()
                 client_uplink_queue.enqueue(msg);
                 //PostLoadKFandMP(mpCurrentKeyFrame);
                 // YoloSLAM
-                // Release space for the pixel value
+                // Release space of the pixel value
                 mpCurrentKeyFrame->encoded_img_data.clear();
                 mpCurrentKeyFrame->encoded_img_data.shrink_to_fit();
             }
@@ -716,26 +716,31 @@ void LocalMapping::PostLoadKFandMP(KeyFrame *mpCurrentKeyFrame, Inference &model
         std::time_t end_time;
 
         // YoloSLAM
+        // Declear a vector to store dynamic objects
+        std::vector<Detection> dynamicObjs;
         //cv::Mat frame = mpCurrentKeyFrame->mImg.clone();
 
         // YoloSLAM: Method 2
         // flag = 1 --> read corlor in BGR color format
+        //Inference *mpYolov8;
+        cv::Mat *pImgFrame;
         if(mpCurrentKeyFrame->encoded_img_data.size()>0){
-            cv::Mat frame = cv::imdecode(mpCurrentKeyFrame->encoded_img_data, 1);
-            cout << "Received Image Size: (" << frame.size[0] << "," << frame.size[1] << "," << frame.channels() << ")"  << endl;
+            pImgFrame = new cv::Mat(cv::imdecode(mpCurrentKeyFrame->encoded_img_data, 1));
+            cout << "Received Image Size: (" << (*pImgFrame).size[0] << "," << (*pImgFrame).size[1] << "," << (*pImgFrame).channels() << ")"  << endl;
             // Release space
             mpCurrentKeyFrame->encoded_img_data.clear();
             mpCurrentKeyFrame->encoded_img_data.shrink_to_fit();
 
-            if (frame.cols > 0){
+            // If the frame has pixels
+            if ((*pImgFrame).cols > 0){
                 // Inference starts here...
-                std::vector<Detection> output = model.runInference(frame);
+                std::vector<Detection> output = model.runInference((*pImgFrame));
                 int detections = output.size();
                 std::cout << "Number of detections:" << detections << std::endl;
 
-                // bool hasDynamic = false;
-                // //cv::Mat mask = cv::Mat::ones(frame.size(), CV_8UC1);
-                // cv::Mat mask(frame.size(), CV_8UC1, cv::Scalar(255));
+                //bool hasDynamic = false;
+                //cv::Mat mask = cv::Mat::ones(frame.size(), CV_8UC1);
+                //cv::Mat mask(frame.size(), CV_8UC1, cv::Scalar(255));
                 
                 // for (int i = 0; i < detections; ++i)
                 // {
@@ -745,7 +750,7 @@ void LocalMapping::PostLoadKFandMP(KeyFrame *mpCurrentKeyFrame, Inference &model
                 //     cv::Scalar color = detection.color;
 
                 //     // Create binary mask with same size as image
-                //     // std::string c = detection.className;
+                //     std::string c = detection.className;
                 //     // if (c == "person" || c == "bicycle" || c == "bus"){
                 //     //     // Detection box
                 //     //     cv::rectangle(mask, box, cv::Scalar(0), cv::FILLED);
@@ -762,19 +767,31 @@ void LocalMapping::PostLoadKFandMP(KeyFrame *mpCurrentKeyFrame, Inference &model
 
                 //         cv::rectangle(frame, textBox, color, cv::FILLED);
                 //         cv::putText(frame, classString, cv::Point(box.x + 5, box.y - 10), cv::FONT_HERSHEY_DUPLEX, 1, cv::Scalar(0, 0, 0), 2, 0);
-                //     //}
-                //     // // This is only for preview purposes
+                //     // }
+                //     // This is only for preview purposes
                 //     cv::imshow("Inference", frame);
                 //     cv::waitKey(1);
 
                 // }
+
+
+                // For each detection, check its label
+                for (int i = 0; i < detections; ++i)
+                {
+                    Detection detection = output[i];
+                    std::string label = detection.className;
+                    if (label == "person" || label == "bicycle" || label == "bus")
+                    {
+                        // Should I add 15 pixels padding?
+                        // if detection.box.x
+                        dynamicObjs.push_back(detection);
+                    }
+                }
             }
             // Free the memory space of the image
             //mpCurrentKeyFrame->mImg.release();
             // Already released
         }
-        
-
         
 
         /////////////////////////////CommSLAM////////////////////////////////
@@ -879,7 +896,84 @@ void LocalMapping::PostLoadKFandMP(KeyFrame *mpCurrentKeyFrame, Inference &model
  
             std::cout << "elapsed time: " << elapsed_seconds.count() << "s"<< std::endl;
 
+
+    std::cout << "KeyFrame has number of keypoints: " << mpCurrentKeyFrame->mvKeys.size() << std::endl;
+    vector<MapPoint*> vpMapPointMatches;
+    std::vector<cv::KeyPoint> mvKeys; 
     
+
+    // YoloSLAM
+    // vpMapPointMatches has the same length as mvKeys
+    // This is because the author set them as one-2-one correspondence.
+    // However,
+    // Since some keypoints cannnot become mappoints
+    // some of the vpMapPointMatches would only have NULL pointers.
+    if(dynamicObjs.size() > 0){
+        vpMapPointMatches = mpCurrentKeyFrame->GetMapPointMatches();
+        mvKeys = mpCurrentKeyFrame->mvKeys;
+        int nRemove = 0;
+        int nMP = 0;
+        for(size_t i=0; i<vpMapPointMatches.size(); i++)
+        {
+            MapPoint* pMP = vpMapPointMatches[i];
+            // If the pMP, pointer of mappoint, is not Null
+            if(pMP)
+            {   
+                nMP++;
+                // select the corresponding keypoint using index i
+                int x = mvKeys[i].pt.x;
+                int y = mvKeys[i].pt.y;
+                // Already check the above coordinates (x,y) is the right opencv coordinates
+
+                // for each point, check if it is in a dynamic object
+                for(int j=0; j<dynamicObjs.size(); j++)
+                {
+                    cv::Rect box = dynamicObjs[j].box;
+                    if(x>box.x && x<(box.x+box.width) && y>box.y && y<(box.y+box.height)){
+                        // In this case, keypoint is on a dynamic object
+                        // Set its color as red
+                        //cv::circle((*pImgFrame), cv::Point(x, y), 5, cv::Scalar(0, 0, 255), -1);
+                        // Set the MP is bad
+                        pMP->SetBadFlag();
+                        nRemove++;
+                        goto nextMapPoint;
+                    }
+                    else
+                    {
+                        // Keypoint is not on a dynamic object
+                        //cv::circle((*pImgFrame), cv::Point(x, y), 5, cv::Scalar(0, 255, 0), -1);
+                    }
+                }
+
+                // Draw the dot on the image
+                // pMP->UpdateMap(mpCurrentKeyFrame->GetMap());
+                // AddMPSet(pMP);
+                // pMP->PostLoad(mpKFid, mpMPid,mpCurrentKeyFrame);
+            }
+            nextMapPoint: ;
+        }
+        // Show the image with the dot
+        //cv::imshow("Keypoints on dynamic objects", (*pImgFrame));
+        //cv::waitKey(1);
+        std::cout << "KeyFrame has "<< nMP <<" matched mappoints, "<< nRemove <<" get removed."<<std::endl;
+        delete pImgFrame;
+    }
+
+    
+
+    
+
+    for (size_t i(0); i < mpCurrentKeyFrame->mvKeys.size(); ++i)
+    {
+        
+        // int val = (int)Mask_dil.at<uchar>(mvKeys[i].pt.y, mvKeys[i].pt.x);
+        // //std::cout << "Feature point not on dynamic object: " << val << std::endl;
+        // if (val == 1) // If the feature point is not on the dynamic object
+        // {
+        //     _mvKeys.push_back(mvKeys[i]);
+        //     _mDescriptors.push_back(mDescriptors.row(i));
+        // }
+    }
 
 }
 
@@ -896,7 +990,7 @@ void LocalMapping::PostLoadKFandMP(KeyFrame *mpCurrentKeyFrame)
         std::time_t end_time;
  
         // YoloSLAM
-        // Just wanna make sure it is all empty
+        // Just make sure it is all empty
         if (mpCurrentKeyFrame->encoded_img_data.size()>0)
         {
             mpCurrentKeyFrame->encoded_img_data.clear();
