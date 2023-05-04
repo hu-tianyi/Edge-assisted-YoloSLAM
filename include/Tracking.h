@@ -42,6 +42,10 @@
 // YoloSLAM
 #include <opencv2/imgcodecs.hpp>
 
+// PoseErrorPredictionProject
+#include <cmath>
+#include <numeric>
+
 
 #include "GeometricCamera.h"
 
