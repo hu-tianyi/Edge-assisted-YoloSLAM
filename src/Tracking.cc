@@ -3268,6 +3268,8 @@ namespace ORB_SLAM3
                     // #include <cmath> 
                     // #include <numeric>
                 vector<float> vMapPointMinDepth;
+                // Comment out all the MaxDepth
+                // as MaxDepth info seems unavailable in Monocular setting
                 //vector<float> vMapPointMaxDepth;
                 
                 for (int i = 0; i < mCurrentFrame.N; i++)
